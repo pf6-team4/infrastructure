@@ -2,7 +2,7 @@ terraform {
   required_providers {
     azurerm = {
       source  = "hashicorp/azurerm"
-      version = "=2.46.0"
+      version = ">= 2.26"
     }
   }
    #for remote
@@ -52,7 +52,7 @@ resource "azurerm_public_ip" "main" {
   name                = "${var.prefix}TFPublicIP"
   location            = var.location
   resource_group_name = azurerm_resource_group.main.name
-  allocation_method   = "Dynamic"
+  allocation_method   = "Static"
   tags                = var.tags
 }
 
@@ -66,15 +66,28 @@ resource "azurerm_network_security_group" "main" {
 
   security_rule {
     name                       = "SSH"
+    priority                   = 1001
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "22"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  }
+
+  security_rule {
+    name                       = "HTTP"
     priority                   = 1000
     direction                  = "Inbound"
     access                     = "Allow"
     protocol                   = "Tcp"
     source_port_range          = "*"
-    destination_port_range     = "*"
+    destination_port_range     = "8080"
     source_address_prefix      = "*"
     destination_address_prefix = "*"
   }
+
 }
 
 # Create network interface
@@ -99,15 +112,6 @@ resource "azurerm_network_interface_security_group_association" "main" {
     network_interface_id      = azurerm_network_interface.main.id
     network_security_group_id = azurerm_network_security_group.main.id
 }
-
-
-# Add public key 
-# resource "azurerm_ssh_public_key" "main" {
-#    name                = azurerm_ssh_public_key.main.name
-#    resource_group_name = azurerm_ssh_public_key.main.resource_group_name
-#    location            = var.location
-#    public_key          = file("/home/ip/Downloads/Porject_key.pem")
-# }
 
 
 # Create a Linux virtual machine and instal jenkins, maven and Ansible in the VM
@@ -145,6 +149,7 @@ resource "azurerm_virtual_machine" "main" {
 
   provisioner "remote-exec" { 
   inline=[
+          "sudo su <<EOF",
           "sudo wget -q -O - https://pkg.jenkins.io/debian-stable/jenkins.io.key | sudo apt-key add -",
           "sudo apt-add-repository 'deb https://pkg.jenkins.io/debian-stable binary/'",
           "sudo apt-get -q update",
@@ -155,11 +160,13 @@ resource "azurerm_virtual_machine" "main" {
           "sudo apt-get -q update",
           "sudo apt install -y ansible",
   ]
+  on_failure = continue
+
     connection {
               type     = "ssh"
-              user     = "${var.admin_username}"
-              password = "${var.admin_password}"
-              host     = azurerm_public_ip.main.name
+              user     = var.admin_username
+              password = var.admin_password
+              host     = azurerm_public_ip.main.ip_address
     }
   }
 }
@@ -171,10 +178,3 @@ data "azurerm_public_ip" "main" {
   depends_on          = [azurerm_virtual_machine.main]
 }
 
-output "os_sku" {
-  value = lookup(var.sku, var.location)
-}
-
-output "public_ip_address" {
-  value = data.azurerm_public_ip.main.ip_address
-}

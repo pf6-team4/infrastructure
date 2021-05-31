@@ -24,12 +24,12 @@ variable "sku" {
   }
 }
 
-variable "admin_username" {
-  default = "team4"
+variable admin_username {
+  type = string
 }
 
-variable "admin_password" {
-  default = "Password123"
+variable admin_password {
+  type = string
 }
 
 

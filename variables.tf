@@ -4,7 +4,7 @@ variable "location" {
 }
 
 variable "prefix" {
-  default = "VM"
+  default = "vm"
 }
 
 variable "tags" {
@@ -30,21 +30,4 @@ variable admin_username {
 
 variable admin_password {
   type = string
-}
-
-
-variable subscription_id {
-    type = string
-}
-
-variable client_appId {
-    type = string
-}
-
-variable client_password {
-    type = string
-}
-
-variable tenant_id {
-    type = string
 }

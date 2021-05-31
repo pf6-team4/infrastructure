@@ -2,14 +2,7 @@ terraform {
   required_providers {
     azurerm = {
       source  = "hashicorp/azurerm"
-      version = ">= 2.26"
-    }
-  }
-   #for remote
-  backend "remote" {
-    organization = "pleianthos"
-    workspaces {
-      name = "Team4"
+      version = "~>2.0"
     }
   }
 }
@@ -17,10 +10,6 @@ terraform {
 # Configure the Microsoft Azure Provider
 provider "azurerm" {
   features {}
-  subscription_id = var.subscription_id
-  client_id       = var.client_appId
-  client_secret   = var.client_password
-  tenant_id       = var.tenant_id
 }
 
 # Create resource group
@@ -114,38 +103,56 @@ resource "azurerm_network_interface_security_group_association" "main" {
 }
 
 
+# Create storage account for boot diagnostics
+resource "azurerm_storage_account" "main" {
+    name                        = "${var.prefix}sabd"
+    resource_group_name         = azurerm_resource_group.main.name
+    location                    = var.location
+    account_tier                = "Standard"
+    account_replication_type    = "LRS"
+}
+
+
+# Create (and display) an SSH key
+resource "tls_private_key" "main_ssh" {
+  algorithm = "RSA"
+  rsa_bits = 4096
+}
+
+
 # Create a Linux virtual machine and instal jenkins, maven and Ansible in the VM
-resource "azurerm_virtual_machine" "main" {
+resource "azurerm_linux_virtual_machine" "main" {
   name                  = "${var.prefix}TFVM"
   location              = var.location
   resource_group_name   = azurerm_resource_group.main.name
   network_interface_ids = [azurerm_network_interface.main.id]
-  vm_size               = "Standard_DS1_v2"
+  size                  = "Standard_DS1_v2"
   tags                  = var.tags
 
-  storage_os_disk {
-    name              = "${var.prefix}OsDisk"
-    caching           = "ReadWrite"
-    create_option     = "FromImage"
-    managed_disk_type = "Premium_LRS"
+  os_disk {
+    name                 = "${var.prefix}OsDisk"
+    caching              = "ReadWrite"
+    storage_account_type = "Premium_LRS"
   }
 
-  storage_image_reference {
+  source_image_reference {
     publisher = "Canonical"
     offer     = "UbuntuServer"
     sku       = lookup(var.sku, var.location)
     version   = "latest"
   }
 
-  os_profile {
-    computer_name  = "${var.prefix}TFVM"
-    admin_username = var.admin_username
-    admin_password = var.admin_password
-  }
+  computer_name  = "${var.prefix}TFVM"
+  admin_username = var.admin_username
+  disable_password_authentication = true
+  
+  
+  admin_ssh_key {
+        username = var.admin_username
+        public_key     = file("~/.ssh/new.pub")
+    }
 
-  os_profile_linux_config {
-    disable_password_authentication = false
-  }
+  
 
   provisioner "remote-exec" { 
   inline=[
@@ -159,22 +166,25 @@ resource "azurerm_virtual_machine" "main" {
           "sudo add-apt-repository --yes --update ppa:ansible/ansible",
           "sudo apt-get -q update",
           "sudo apt install -y ansible",
+          "sudo cat /var/lib/jenkins/secrets/initialAdminPassword"
   ]
   on_failure = continue
 
     connection {
-              type     = "ssh"
-              user     = var.admin_username
-              password = var.admin_password
-              host     = azurerm_public_ip.main.ip_address
+              type        = "ssh"
+              user        = var.admin_username
+              host        = azurerm_public_ip.main.ip_address
     }
   }
+
+
+
 }
 
 #data source
 data "azurerm_public_ip" "main" {
   name                = azurerm_public_ip.main.name
-  resource_group_name = azurerm_virtual_machine.main.resource_group_name
-  depends_on          = [azurerm_virtual_machine.main]
+  resource_group_name = azurerm_linux_virtual_machine.main.resource_group_name
+  depends_on          = [azurerm_linux_virtual_machine.main]
 }
 

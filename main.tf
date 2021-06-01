@@ -150,7 +150,7 @@ resource "azurerm_linux_virtual_machine" "main" {
   admin_ssh_key {
         username = var.admin_username
         # public_key     = file("~/.ssh/new.pub")
-        # Add your own key in keys directory by running : 
+        # Add your own key in keys directory by running : ssh-keygen -t rsa -b 4096 and save in keys directory
         public_key     = file("keys/new.pub")
     }
 

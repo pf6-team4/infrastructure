@@ -171,6 +171,13 @@ resource "azurerm_linux_virtual_machine" "main" {
           "sudo add-apt-repository --yes --update ppa:ansible/ansible",
           "sudo apt-get -q update",
           "sudo apt install -y ansible",
+          "sudo apt install -y apt-transport-https ca-certificates curl software-properties-common",
+          "sudo apt install -y curl",
+          "curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -",
+          "sudo add-apt-repository 'deb [arch=amd64] https://download.docker.com/linux/ubuntu bionic stable'",
+          "sudo apt-get -q update",
+          "apt-cache policy docker-ce",
+          "sudo apt install -y docker-ce",
           "sudo cat /var/lib/jenkins/secrets/initialAdminPassword"
   ]
   on_failure = continue

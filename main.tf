@@ -5,11 +5,22 @@ terraform {
       version = "~>2.0"
     }
   }
+  #for remote
+  backend "remote" {
+    organization = "pleianthos"
+    workspaces {
+      name = "Team4"
+    }
+  }
 }
 
 # Configure the Microsoft Azure Provider
 provider "azurerm" {
   features {}
+  subscription_id = var.subscription_id
+  client_id       = var.client_appId
+  client_secret   = var.client_password
+  tenant_id       = var.tenant_id
 }
 
 # Create resource group
@@ -103,20 +114,11 @@ resource "azurerm_network_interface_security_group_association" "main" {
 }
 
 
-# Create storage account for boot diagnostics
-resource "azurerm_storage_account" "main" {
-    name                        = "${var.prefix}sabd"
-    resource_group_name         = azurerm_resource_group.main.name
-    location                    = var.location
-    account_tier                = "Standard"
-    account_replication_type    = "LRS"
-}
-
-
-# Create (and display) an SSH key
+# Create an SSH key
 resource "tls_private_key" "main_ssh" {
   algorithm = "RSA"
   rsa_bits = 4096
+ 
 }
 
 
@@ -149,13 +151,8 @@ resource "azurerm_linux_virtual_machine" "main" {
   
   admin_ssh_key {
         username = var.admin_username
-        # public_key     = file("~/.ssh/new.pub")
-        # Add your own key in keys directory by running : 
-        ### (POWERSHELL) ###
-        # $ mkdir keys 
-        # $ ssh-keygen -t rsa -b 4096 -f ./keys/new -q -N """" 
-        public_key     = file("keys/new.pub")
-    }
+         public_key = tls_private_key.main_ssh.public_key_openssh
+  }
 
   
 
@@ -170,6 +167,7 @@ resource "azurerm_linux_virtual_machine" "main" {
           "sudo apt install -y software-properties-common",
           "sudo add-apt-repository --yes --update ppa:ansible/ansible",
           "sudo apt-get -q update",
+          "sudo apt install -y default-jdk",
           "sudo apt install -y ansible",
           "sudo apt install -y apt-transport-https ca-certificates curl software-properties-common",
           "sudo apt install -y curl",
@@ -178,14 +176,16 @@ resource "azurerm_linux_virtual_machine" "main" {
           "sudo apt-get -q update",
           "apt-cache policy docker-ce",
           "sudo apt install -y docker-ce",
+          "chmod 777 /var/run/docker.sock",
           "sudo cat /var/lib/jenkins/secrets/initialAdminPassword"
   ]
   on_failure = continue
 
     connection {
-              type        = "ssh"
-              user        = var.admin_username
-              host        = azurerm_public_ip.main.ip_address
+                  type        = "ssh"
+                  user        = var.admin_username
+                  private_key = tls_private_key.main_ssh.private_key_pem
+                  host        = azurerm_public_ip.main.ip_address
     }
   }
 
